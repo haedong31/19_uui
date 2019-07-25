@@ -89,13 +89,14 @@ def my_timer(fn, *args):
     return y
 
 
-def my_evaluation(true_y, est_y, alg, file_name):
+def my_evaluation(true_y, est_y, alg, eps, min_pts):
+    print('[INFO] evaluate performance')
+
     true_y_set = list(set(true_y))
     est_y_set = list(set(est_y) - {-1})
     cluster_sizes = list()
     c = np.empty([len(true_y_set), 2])
     result = pd.DataFrame(columns=['true_y', 'true_n', 'est_y', 'est_n'])
-    add_info = list()
 
     # estimated membership and its count
     for n, y in enumerate(true_y_set):
@@ -106,7 +107,7 @@ def my_evaluation(true_y, est_y, alg, file_name):
         c[n] = tmp_cnt
     label_assign = dict(zip(np.argmax(c, axis=0), est_y_set))
 
-    # summarize in a Pandas dataframe
+    # summarize in a Pandas data frame
     for n, y in enumerate(true_y_set):
         tmp_row = list()
         tmp_row.append(y)
@@ -118,7 +119,7 @@ def my_evaluation(true_y, est_y, alg, file_name):
             tmp_row.append(-1)
             tmp_row.append(0)
         result = result.append(pd.Series(tmp_row, index=result.columns), ignore_index=True)
-        print(result)
+    print(result)
 
     # additional information
     # accuracy
@@ -132,24 +133,28 @@ def my_evaluation(true_y, est_y, alg, file_name):
         accuracy = sum(n_crr) / len(true_y)
     else:
         accuracy = sum(result['est_n']) / len(true_y)
+    print('accuracy: {}'.format(accuracy))
 
     # number of estimated users and noises
     n_clusters = len(set(est_y)) - (1 if -1 in est_y else 0)
     n_noise = list(est_y).count(-1)
+    print('number of estimated users: {} / noises: {}'.format(n_clusters, n_noise))
 
     # create a saving directory
     save_dir = os.path.join('.', 'result', alg)
     os.makedirs(save_dir, exist_ok=True)
 
     # save an evaluation table
+    file_name = f'{len(true_y_set)}_{eps:.2f}_{min_samples}.csv'
     save_path = os.path.join(save_dir, file_name + '.csv')
     result.to_csv(save_path)
     
     # add additional information
+    print('save the result')
     with open(save_path, 'a') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(['accuracy', 'n_users_est', 'n_noise'])
-        csv_writer.writerow([accuracy, n_clusters, n_noise])
+        csv_writer.writerow(['accuracy', 'n_users_est', 'n_noise', 'eps', 'min_pts'])
+        csv_writer.writerow([accuracy, n_clusters, n_noise, eps, min_pts])
 
 
 # p = DataProcessor(glob('./data/collections_csv/*.csv'))
@@ -177,13 +182,13 @@ for n, bd in enumerate(bert_data):
     l += 1
 
 # search the DBSCAN parameters
-eps1 = my_timer(eps_vs, flat_bert_data, 0.8, 20)
+eps = my_timer(eps_vs, flat_bert_data, 0.8, 20)
 eps2 = eps_wmean(flat_bert_data, 20)
-min_samples1 = my_timer(min_pt, flat_bert_data, eps1, 0.8, 20)
+min_samples = my_timer(min_pt, flat_bert_data, eps1, 0.8, 20)
 # min_samples2 = min_pt(flat_bert_data, eps2, 0.85, 20)
 
 # run DBSCAN
-model = DBSCAN(eps=eps1, min_samples=min_samples1, metric='euclidean', n_jobs=2)
+model = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', n_jobs=2)
 
 start = timeit.default_timer()
 model.fit(flat_bert_data)
@@ -192,3 +197,5 @@ end = timeit.default_timer()
 est_labels = model.labels_
 n_clusters = len(set(est_labels)) - (1 if -1 in est_labels else 0)
 n_noise = list(est_labels).count(-1)
+
+my_evaluation(true_labels, est_labels, 'bert', eps, min_samples)
