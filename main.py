@@ -80,11 +80,14 @@ def my_evaluation(true_y, est_y, measure = 'accuracy'):
 
     if measure == 'accuracy':
         c = np.empty([len(true_y_set), 2])
-        result = np.empty([len(true_y_set), 3])
+        result = np.empty([len(true_y_set), 4])  # true y, true n, est y, est n
+        cluster_sizes = list()
 
         # find indices of true membership for each user
         for n, y in enumerate(true_y_set):
             user_idx = [n for n, x in enumerate(true_y) if x == y]
+            cluster_sizes.append(len(user_idx))
+
             est_y_user = est_y[user_idx]
             tmp_labels, tmp_cnt = np.unique([x for x in est_y_user if x != -1], return_counts=True)
             c[n] = tmp_cnt
@@ -93,6 +96,7 @@ def my_evaluation(true_y, est_y, measure = 'accuracy'):
         for n, y in enumerate(true_y_set):
             tmp_row = list()
             tmp_row.append(y)
+            tmp_row.append(cluster_sizes[n])
             if y in label_assign.keys():
                 tmp_row.append(label_assign[y])
                 tmp_row.append(c[y][label_assign[y]])
@@ -100,7 +104,9 @@ def my_evaluation(true_y, est_y, measure = 'accuracy'):
                 tmp_row.append(-1)
                 tmp_row.append(0)
             result[n] = tmp_row
-    return result
+        return result
+    else:
+        print('enter proper performance measure')
 
 
 # p = DataProcessor(glob('./data/collections_csv/*.csv'))
@@ -129,12 +135,12 @@ for n, bd in enumerate(bert_data):
 
 # search the DBSCAN parameters
 eps1 = my_timer(eps_vs, flat_bert_data, 0.8, 20)
-# eps2 = eps_wmean(flat_bert_data, 20)
+eps2 = eps_wmean(flat_bert_data, 20)
 min_samples1 = my_timer(min_pt, flat_bert_data, eps1, 0.8, 20)
 # min_samples2 = min_pt(flat_bert_data, eps2, 0.85, 20)
 
 # run DBSCAN
-model = DBSCAN(eps=eps1, min_samples=10, metric='euclidean', n_jobs=2)
+model = DBSCAN(eps=eps1, min_samples=min_samples1, metric='euclidean', n_jobs=2)
 
 start = timeit.default_timer()
 model.fit(flat_bert_data)
