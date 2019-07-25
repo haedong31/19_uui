@@ -5,6 +5,7 @@ from sklearn.cluster import DBSCAN
 import csv
 import numpy as np
 import os
+import pandas as pd
 import pickle
 import timeit
 
@@ -65,6 +66,20 @@ class DataProcessor(object):
                 pickle.dump(d, f)
 
 
+class ExpProcessor(object):
+    def __init__(self, n_users, ebd_type):
+        self.n_users = n_users
+        self.ebd_type = ebd_type
+    
+    def file_loader(self):
+        file_paths = glob(os.path.join('.', 'data', self.ebd_type + '_data', '*.txt'))
+        sub_file_paths = np.random(file_paths, self.n_users)
+        for n, p in enumerate(sub_file_paths):
+            print('### PROCESSING {} out of {}'.format(n+1, len(sub_file_paths)))
+            with open(p, 'rb') as f:
+                bert_data.append(pickle.load(f))
+    
+
 def my_timer(fn, *args):
     start = timeit.default_timer()
     y = fn(*args)
@@ -74,39 +89,67 @@ def my_timer(fn, *args):
     return y
 
 
-def my_evaluation(true_y, est_y, measure = 'accuracy'):
+def my_evaluation(true_y, est_y, alg, file_name):
     true_y_set = list(set(true_y))
     est_y_set = list(set(est_y) - {-1})
+    cluster_sizes = list()
+    c = np.empty([len(true_y_set), 2])
+    result = pd.DataFrame(columns=['true_y', 'true_n', 'est_y', 'est_n'])
+    add_info = list()
 
-    if measure == 'accuracy':
-        c = np.empty([len(true_y_set), 2])
-        result = np.empty([len(true_y_set), 4])  # true y, true n, est y, est n
-        cluster_sizes = list()
+    # estimated membership and its count
+    for n, y in enumerate(true_y_set):
+        user_idx = [n for n, x in enumerate(true_y) if x == y]
+        cluster_sizes.append(len(user_idx))
+        est_y_user = est_y[user_idx]
+        tmp_cnt = np.unique([x for x in est_y_user if x != -1], return_counts=True)[1]
+        c[n] = tmp_cnt
+    label_assign = dict(zip(np.argmax(c, axis=0), est_y_set))
 
-        # find indices of true membership for each user
-        for n, y in enumerate(true_y_set):
-            user_idx = [n for n, x in enumerate(true_y) if x == y]
-            cluster_sizes.append(len(user_idx))
+    # summarize in a Pandas dataframe
+    for n, y in enumerate(true_y_set):
+        tmp_row = list()
+        tmp_row.append(y)
+        tmp_row.append(cluster_sizes[n])
+        if y in label_assign.keys():
+            tmp_row.append(label_assign[y])
+            tmp_row.append(c[y][label_assign[y]])
+        else:
+            tmp_row.append(-1)
+            tmp_row.append(0)
+        result = result.append(pd.Series(tmp_row, index=result.columns), ignore_index=True)
+        print(result)
 
-            est_y_user = est_y[user_idx]
-            tmp_labels, tmp_cnt = np.unique([x for x in est_y_user if x != -1], return_counts=True)
-            c[n] = tmp_cnt
-        label_assign = dict(zip(np.argmax(c, axis=0), est_y_set))
-
-        for n, y in enumerate(true_y_set):
-            tmp_row = list()
-            tmp_row.append(y)
-            tmp_row.append(cluster_sizes[n])
-            if y in label_assign.keys():
-                tmp_row.append(label_assign[y])
-                tmp_row.append(c[y][label_assign[y]])
+    # additional information
+    # accuracy
+    if any(result['est_n'] - result['true_n'] > 0):
+        n_crr = list()
+        for n, row in result.iterrows():
+            if row['est_n'] > row['true_y']:
+                n_crr[n] = row['true_y']
             else:
-                tmp_row.append(-1)
-                tmp_row.append(0)
-            result[n] = tmp_row
-        return result
+                n_crr[n] = row['est_y']
+        accuracy = sum(n_crr) / len(true_y)
     else:
-        print('enter proper performance measure')
+        accuracy = sum(result['est_n']) / len(true_y)
+
+    # number of estimated users and noises
+    n_clusters = len(set(est_y)) - (1 if -1 in est_y else 0)
+    n_noise = list(est_y).count(-1)
+
+    # create a saving directory
+    save_dir = os.path.join('.', 'result', alg)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # save an evaluation table
+    save_path = os.path.join(save_dir, file_name + '.csv')
+    result.to_csv(save_path)
+    
+    # add additional information
+    with open(save_path, 'a') as f:
+        csv_writer = csv.writer(f)
+        csv_writer.writerow(['accuracy', 'n_users_est', 'n_noise'])
+        csv_writer.writerow([accuracy, n_clusters, n_noise])
 
 
 # p = DataProcessor(glob('./data/collections_csv/*.csv'))
@@ -149,4 +192,3 @@ end = timeit.default_timer()
 est_labels = model.labels_
 n_clusters = len(set(est_labels)) - (1 if -1 in est_labels else 0)
 n_noise = list(est_labels).count(-1)
-my_evaluation(true_labels, est_labels)
