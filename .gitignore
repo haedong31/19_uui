@@ -1,0 +1,11 @@
+# ignore content of these folders
+data/
+literature/
+result/
+
+# ignore these files
+.DS_Store
+scratch.py
+bert_output.py
+*.xlsx
+*.pyc
