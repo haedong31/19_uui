@@ -60,7 +60,7 @@ class ExpProcessor(object):
             user_idx = [n for n, x in enumerate(e.true_y) if x == y]
             cluster_sizes.append(len(user_idx))
             est_y_user = est_y[user_idx]
-
+            
             tmp_y, tmp_cnt = np.unique([x for x in est_y_user if x != -1], return_counts=True)
             for m, _y in enumerate(list(tmp_y)):
                 tmp_freq[_y] = tmp_cnt[m]
@@ -80,7 +80,7 @@ class ExpProcessor(object):
             max_idx = np.where(self.cnt_table == max_n)
             max_idx_row = max_idx[0]
             max_idx_col = max_idx[1]
-            
+
             # make sure max_idx only contains indices of row and column that never have been selected
             for r, c in label_assign.items():
                 # row wise
@@ -95,6 +95,7 @@ class ExpProcessor(object):
 
             if len(max_idx_row) != len(max_idx_col):
                 print('[ERROR] lengths of max_idx_row and max_idx_col do not match')
+                return
 
             # handle the case of tie; break the tie by random choice
             if len(max_idx_row) != 1:
@@ -107,8 +108,10 @@ class ExpProcessor(object):
             max_idx_row, max_idx_col = list(label_assign.items())[-1]
             adj_row = sum([1 for x in label_assign.keys() if x < max_idx_row])
             adj_col = sum([1 for x in label_assign.values() if x < max_idx_col])
+
             dummy_max_idx_row = max_idx_row - adj_row
             dummy_max_idx_col = max_idx_col - adj_col
+
             dummy_c = np.delete(dummy_c, dummy_max_idx_row, axis=0)
             dummy_c = np.delete(dummy_c, dummy_max_idx_col, axis=1)
 
@@ -185,128 +188,6 @@ start = timeit.default_timer()
 dbscan_model.fit(pca_flat_bert)
 est_labels = dbscan_model.labels_
 end = timeit.default_timer()
-print('[INFO] work time: {} min'.format((end - start) / 60))
-
-n_clusters = len(set(est_labels)) - (1 if -1 in est_labels else 0)
-n_noise = list(est_labels).count(-1)
+print('[INFO] work time fitting DBSCAN: {} min'.format((end - start) / 60))
 
 e.evaluation(est_labels, 'bert', eps, min_samples)
-
-
-print('[INFO] evaluate performance')
-
-true_y_set = list(set(e.true_y))
-est_labels_set = list(set(est_labels) - {-1})
-cluster_sizes = list()
-cnt_table = np.empty([len(true_y_set), len(est_labels_set)])
-result = pd.DataFrame(columns=['true_y', 'true_n', 'est_y', 'est_n'])
-
-# estimated membership and its count
-for n, y in enumerate(true_y_set):
-    tmp_freq = dict(zip(est_labels_set, [0] * len(est_labels_set)))
-
-    user_idx = [n for n, x in enumerate(e.true_y) if x == y]
-    cluster_sizes.append(len(user_idx))
-    est_labels_user = est_labels[user_idx]
-
-    tmp_y, tmp_cnt = np.unique([x for x in est_labels_user if x != -1], return_counts=True)
-    for m, _y in enumerate(list(tmp_y)):
-        tmp_freq[_y] = tmp_cnt[m]
-
-    cnt_table[n] = list(tmp_freq.values())
-
-# label assignment
-label_assign = dict()  # key (user) : value (estimated membership)
-dummy_c = cnt_table
-n_rows = np.shape(cnt_table)[0]
-n_cols = np.shape(cnt_table)[1]
-i = 0
-while i < n_rows and i < n_cols:
-    max_n = np.amax(dummy_c)
-
-    # assign estimated cluster membership to a user
-    max_idx = np.where(cnt_table == max_n)
-    max_idx_row = max_idx[0]
-    max_idx_col = max_idx[1]
-
-    # make sure max_idx only contains indices of row and column that never have been selected
-    for r, c in label_assign.items():
-        # row wise
-        tmp_del_idx = np.where(max_idx_row==r)
-        max_idx_row = np.delete(max_idx_row, tmp_del_idx)
-        max_idx_col = np.delete(max_idx_col, tmp_del_idx)
-
-        # column wise
-        tmp_del_idx = np.where(max_idx_col==c)
-        max_idx_row = np.delete(max_idx_row, tmp_del_idx)
-        max_idx_col = np.delete(max_idx_col, tmp_del_idx)
-
-    if len(max_idx_row) != len(max_idx_col):
-        print('[ERROR] lengths of max_idx_row and max_idx_col do not match')
-
-    # handle the case of tie; break the tie by random choice
-    if len(max_idx_row) != 1:
-        tie_idx = np.random.choice(range(len(max_idx_row)))
-        label_assign.update({int(max_idx_row[tie_idx]): int(max_idx_col[tie_idx])})
-    else:
-        label_assign.update({int(max_idx_row): int(max_idx_col)})
-
-    # delete already got assigned cluster label and user from c
-    max_idx_row, max_idx_col = list(label_assign.items())[-1]
-    adj_row = sum([1 for x in label_assign.keys() if x < max_idx_row])
-    adj_col = sum([1 for x in label_assign.values() if x < max_idx_col])
-    dummy_max_idx_row = max_idx_row - adj_row
-    dummy_max_idx_col = max_idx_col - adj_col
-    dummy_c = np.delete(dummy_c, dummy_max_idx_row, axis=0)
-    dummy_c = np.delete(dummy_c, dummy_max_idx_col, axis=1)
-
-    i += 1
-
-# summarize in a Pandas data frame
-for n, y in enumerate(true_y_set):
-    tmp_row = list()
-    tmp_row.append(y)
-    tmp_row.append(cluster_sizes[n])
-    if y in label_assign.keys():
-        tmp_row.append(label_assign[y])
-        tmp_row.append(cnt_table[y][label_assign[y]])
-    else:
-        tmp_row.append(-1)
-        tmp_row.append(0)
-    result = result.append(pd.Series(tmp_row, index=result.columns), ignore_index=True)
-print(result)
-
-# additional information
-# accuracy
-if any(result['est_n'] - result['true_n'] > 0):
-    n_crr = list()
-    for n, row in result.iterrows():
-        if row['est_n'] > row['true_y']:
-            n_crr[n] = row['true_y']
-        else:
-            n_crr[n] = row['est_y']
-    accuracy = sum(n_crr) / len(self.true_y)
-else:
-    accuracy = sum(result['est_n']) / len(self.true_y)
-print('accuracy: {}'.format(accuracy))
-
-# number of estimated users and noises
-n_clusters = len(set(est_y)) - (1 if -1 in est_y else 0)
-n_noise = list(est_y).count(-1)
-print('number of estimated users: {} / noises: {}'.format(n_clusters, n_noise))
-
-# create a saving directory
-save_dir = os.path.join('.', 'result', alg)
-os.makedirs(save_dir, exist_ok=True)
-
-# save an evaluation table
-file_name = f'{len(true_y_set)}_{eps:.2f}_{min_samples}.csv'
-save_path = os.path.join(save_dir, file_name + '.csv')
-result.to_csv(save_path)
-
-# add additional information
-print('save the result')
-with open(save_path, 'a') as f:
-    csv_writer = csv.writer(f)
-    csv_writer.writerow(['accuracy', 'n_users_est', 'n_noise', 'eps', 'min_pts'])
-    csv_writer.writerow([accuracy, n_clusters, n_noise, eps, min_pts])
