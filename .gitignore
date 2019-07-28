@@ -1,4 +1,5 @@
 # ignore content of these folders
+__pycache__/
 data/
 literature/
 result/

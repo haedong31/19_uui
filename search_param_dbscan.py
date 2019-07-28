@@ -40,7 +40,7 @@ def eps_wmean(x, bin_size=10):
         right_pt = bin_edges[n + 1]
         bin_mid_pt.append((left_pt + right_pt) / 2)
 
-    return np.average(bin_mid_pt, weight=hist)
+    return np.average(bin_mid_pt, weights=hist)
 
 
 # minimum number of neighbors
