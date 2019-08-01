@@ -22,18 +22,18 @@ class ExpProcessor(object):
         print('[INFO] loading embedding data files')
         file_paths = glob(os.path.join('.', 'data', self.ebd_type, '*.txt'))
         sub_file_paths = np.random.choice(file_paths, self.n_users)
-        
+
         # load embedding data files
         for n, p in enumerate(sub_file_paths):
             print('### PROCESSING {} out of {}'.format(n+1, len(sub_file_paths)))
             with open(p, 'rb') as f:
                 self.ebd_data.append(pickle.load(f))
-        
+
         # create a ground-truth-label vector
         for n, d in enumerate(self.ebd_data):
             for i in range(len(d)):
                 self.true_y.append(n)
-        
+
     def mean_pooling(self):
         # turn the embedding matrix for a sentence into a row vector by averaging out
         print('[INFO] mean pooling of word embeddings')
@@ -44,7 +44,7 @@ class ExpProcessor(object):
                 pool_ebd_data.append(emd_mx.mean(axis=0))
         return pool_ebd_data
 
-    def evaluation(self, est_y, alg, eps, min_pts):
+    def evaluation(self, est_y, alg, eps, nu):
         print('[INFO] evaluate performance')
 
         true_y_set = list(set(self.true_y))
@@ -60,7 +60,7 @@ class ExpProcessor(object):
             user_idx = [n for n, x in enumerate(e.true_y) if x == y]
             cluster_sizes.append(len(user_idx))
             est_y_user = est_y[user_idx]
-            
+
             tmp_y, tmp_cnt = np.unique([x for x in est_y_user if x != -1], return_counts=True)
             for m, _y in enumerate(list(tmp_y)):
                 tmp_freq[_y] = tmp_cnt[m]
@@ -155,16 +155,16 @@ class ExpProcessor(object):
         os.makedirs(save_dir, exist_ok=True)
 
         # save an evaluation table
-        file_name = f'{len(true_y_set)}_{eps:.2f}_{min_samples}.csv'
+        file_name = f'{len(true_y_set)}_{eps:.2f}_{nu}.csv'
         save_path = os.path.join(save_dir, file_name + '.csv')
         result.to_csv(save_path)
-        
+
         # add additional information
         print('save the result')
         with open(save_path, 'a') as f:
             csv_writer = csv.writer(f)
             csv_writer.writerow(['accuracy', 'n_users_est', 'n_noise', 'eps', 'min_pts'])
-            csv_writer.writerow([accuracy, n_clusters, n_noise, eps, min_pts])
+            csv_writer.writerow([accuracy, n_clusters, n_noise, eps, nu])
 
 
 e = ExpProcessor(3, 'bert')
@@ -178,16 +178,19 @@ sum(pca_model.explained_variance_ratio_)
 
 # search the DBSCAN parameters
 # eps = my_timer(eps_vs, flat_bert, 0.8, 20)
-eps = my_timer(eps_wmean, pca_flat_bert, 20)
-min_samples = my_timer(min_pt, pca_flat_bert, eps, 0.8, 20)
+eps = my_timer(eps_wmean, pca_flat_bert)
+nu1 = my_timer(nu_wmean, pca_flat_bert, eps)
+nu2 = my_timer(nu_wmean_trunc, pca_flat_bert, eps)
+nu = (nu1 + nu2) / 2
+print(eps)
+print(nu)
 
 # run DBSCAN
-dbscan_model = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', n_jobs=2)
-
+dbscan_model = DBSCAN(eps=eps, min_samples=nu, metric='euclidean', n_jobs=2)
 start = timeit.default_timer()
 dbscan_model.fit(pca_flat_bert)
 est_labels = dbscan_model.labels_
 end = timeit.default_timer()
 print('[INFO] work time fitting DBSCAN: {} min'.format((end - start) / 60))
 
-e.evaluation(est_labels, 'bert', eps, min_samples)
+e.evaluation(est_labels, 'bert', eps, nu)
