@@ -26,6 +26,16 @@ class DataProcessor(object):
 
             self.raw_data.append(itr_list)
 
+    def pickle_loader(self):
+        print('[INFO load pickle files')
+
+        num_files = len(self.file_paths)
+        for i in range(num_files):
+            print('### PROCESSING {} out of {}'.format(i + 1, num_files))
+
+            with open(self.file_paths[i], 'rb') as f:
+                self.raw_data.append(pickle.load(f))
+
     def bert(self):
         if not self.raw_data:
             print('[ERROR] load raw data first')
@@ -38,6 +48,7 @@ class DataProcessor(object):
         bert_model = load_bert_model()
         for i in range(num_datasets):
             print('### PROCESSING {} out of {}'.format(i+1, num_datasets))
+            itr_list = list()
             bert_data.append(generate_vecs_bert(bert_model, self.raw_data[i], type='matrix'))
 
         # create a saving directory
@@ -45,7 +56,7 @@ class DataProcessor(object):
         if os.path.exists('./data/bert_data'):
             cnt = 1
             while True:
-                save_path = os.path.join('.', 'data', 'bert_data_' + cnt)
+                save_path = os.path.join('.', 'data', 'bert_data_' + str(cnt))
                 if os.path.exists(save_path):
                     cnt += 1
                 else:
@@ -62,6 +73,9 @@ class DataProcessor(object):
 
 
 if __name__ == '__main__':
-    d = DataProcessor(glob('./data/collections_csv/*.csv'))
-    d.csv_loader()
+    # d = DataProcessor(glob('./data/collections_csv/*.csv'))
+    # d.csv_loader()
+
+    d = DataProcessor(glob('./data/twitter/*.txt'))
+    d.pickle_loader()
     d.bert()
