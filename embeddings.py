@@ -1,6 +1,6 @@
 from pytorch_pretrained_bert import BertTokenizer, BertModel
-import tensorflow as tf
-import tensorflow_hub as hub
+# import tensorflow as tf
+# import tensorflow_hub as hub
 import torch
 import numpy as np
 
@@ -21,8 +21,14 @@ def generate_vecs_bert(models, document, type='vector', cuda=False):
 
     model, tokenizer = models
 
+    print('[INFO] BERT encoder starts working')
     embedding = list()
-    for sent in document:
+    len_doc = len(document)
+    for n, sent in enumerate(document):
+        # print the status
+        if n % 100 == 0:
+            print('### PROCESSING {} out of {}'.format(n, len_doc))
+
         tokenized_sent = tokenizer.tokenize(sent)
         indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_sent)
         segments_ids = [0] * len(tokenized_sent)
