@@ -27,7 +27,7 @@ class DataProcessor(object):
             self.raw_data.append(itr_list)
 
     def pickle_loader(self):
-        print('[INFO load pickle files')
+        print('[INFO] load pickle files')
 
         num_files = len(self.file_paths)
         for i in range(num_files):
@@ -41,16 +41,6 @@ class DataProcessor(object):
             print('[ERROR] load raw data first')
             return
 
-        # embed the raw data with BERT
-        print('[INFO] embed the raw data with BERT')
-        num_datasets = len(self.raw_data)
-        bert_data = list()
-        bert_model = load_bert_model()
-        for i in range(num_datasets):
-            print('### PROCESSING {} out of {}'.format(i+1, num_datasets))
-            itr_list = list()
-            bert_data.append(generate_vecs_bert(bert_model, self.raw_data[i], type='matrix'))
-
         # create a saving directory
         save_path = './data/bert_data'
         if os.path.exists('./data/bert_data'):
@@ -63,13 +53,21 @@ class DataProcessor(object):
                     break
         os.makedirs(save_path, exist_ok=False)
 
-        # save the embedded data in the pickle format
-        print('[INFO] save the BERT-embedded data into {}'.format(save_path))
-        for n, d in enumerate(bert_data):
-            print('### PROCESSING {} out of {}'.format(n + 1, num_datasets))
-            user_name = os.path.basename(self.file_paths[n]).split('_')[0]
-            with open(os.path.join('.', 'data', 'bert_data', user_name + '_bert.txt'), 'wb') as f:
-                pickle.dump(d, f)
+        # embed the raw data with BERT
+        print('[INFO] embed the raw data with BERT')
+        num_datasets = len(self.raw_data)
+        bert_data = list()
+        bert_model = load_bert_model()
+        for i in range(num_datasets):
+            print('### PROCESSING {} out of {}'.format(i+1, num_datasets))
+            itr_vec = generate_vecs_bert(bert_model, self.raw_data[i], type='matrix')
+            bert_data.append(itr_vec)
+
+            # save the embedded data in the pickle format
+            print('[INFO] save the BERT-embedded data into {}'.format(save_path))
+            user_name = os.path.basename(self.file_paths[i]).split('_')[0]
+            with open(os.path.join(save_path, user_name + '_bert.txt'), 'wb') as f:
+                pickle.dump(itr_vec, f)
 
 
 if __name__ == '__main__':
