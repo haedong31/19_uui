@@ -26,8 +26,9 @@ def generate_vecs_bert(models, document, type='vector', cuda=False):
     len_doc = len(document)
     for n, sent in enumerate(document):
         # print the status
-        if n % 100 == 0:
-            print('### PROCESSING {} out of {}'.format(n, len_doc))
+        # if n % 100 == 0:
+        #     print('### PROCESSING {} out of {}'.format(n, len_doc))
+        print(n)
 
         tokenized_sent = tokenizer.tokenize(sent)
         indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_sent)

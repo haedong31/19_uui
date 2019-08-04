@@ -18,9 +18,8 @@ class ExpProcessor(object):
         self.true_y = list()
         self.cnt_table = None
 
-    def file_loader(self):
+    def file_loader(self, file_paths):
         print('[INFO] loading embedding data files')
-        file_paths = glob(os.path.join('.', 'data', self.ebd_type, '*.txt'))
         sub_file_paths = np.random.choice(file_paths, self.n_users)
 
         # load embedding data files
@@ -166,31 +165,68 @@ class ExpProcessor(object):
             csv_writer.writerow(['accuracy', 'n_users_est', 'n_noise', 'eps', 'min_pts'])
             csv_writer.writerow([accuracy, n_clusters, n_noise, eps, nu])
 
+        return n_clusters, accuracy
 
-e = ExpProcessor(3, 'bert')
-e.file_loader()
-flat_bert = e.mean_pooling()
+    def process(self):
+        if self.ebd_type == 'bert':
+            flat_bert = self.mean_pooling()
 
-# apply PCA
-pca_model = PCA(n_components=128)
-pca_flat_bert = pca_model.fit_transform(flat_bert)
-sum(pca_model.explained_variance_ratio_)
+            # apply PCA
+            pca_model = PCA(n_components=128)
+            pca_flat_bert = pca_model.fit_transform(flat_bert)
+            explained_var = sum(pca_model.explained_variance_ratio_)
+            print('[INFO] PCA explaned variance: {}'.format(explained_var))
 
-# search the DBSCAN parameters
-# eps = my_timer(eps_vs, flat_bert, 0.8, 20)
-eps = my_timer(eps_wmean, pca_flat_bert)
-nu1 = my_timer(nu_wmean, pca_flat_bert, eps)
-nu2 = my_timer(nu_wmean_trunc, pca_flat_bert, eps)
-nu = (nu1 + nu2) / 2
-print(eps)
-print(nu)
+            # search the DBSCAN parameters
+            eps = eps_wmean(pca_flat_bert)
+            nu1 = nu_wmean(pca_flat_bert, eps)
+            nu2 = nu_wmean_trunc(pca_flat_bert, eps)
+            nu = (nu1 + nu2) / 2
 
-# run DBSCAN
-dbscan_model = DBSCAN(eps=eps, min_samples=nu, metric='euclidean', n_jobs=2)
-start = timeit.default_timer()
-dbscan_model.fit(pca_flat_bert)
-est_labels = dbscan_model.labels_
-end = timeit.default_timer()
-print('[INFO] work time fitting DBSCAN: {} min'.format((end - start) / 60))
+            # run DBSCAN
+            dbscan_model = DBSCAN(eps=eps, min_samples=nu, metric='euclidean', n_jobs=2)
+            start = timeit.default_timer()
+            dbscan_model.fit(pca_flat_bert)
+            est_labels = dbscan_model.labels_
+            end = timeit.default_timer()
+            # print('[INFO] work time fitting DBSCAN: {} min'.format((end - start) / 60))
 
-e.evaluation(est_labels, 'bert', eps, nu)
+            c, a = self.evaluation(est_labels, 'bert', eps, nu)
+            return c, a, explained_var
+
+
+if __name__ == '__main__':
+    file_paths = glob('./data/bert_data/*.txt')
+
+    num_clusters = list()
+    accuracies = list()
+    explained_var = list()
+    for num_users in range(1, 6):  # from 1 to 5
+        tmp_nclusters = list()
+        tmp_acc = list()
+        tmp_var = list()
+        for i in range(10):  # repeat 10 times
+            print('[INFO] number of users: {} / iteration: {}'.format(num_users, i + 1))
+
+            e = ExpProcessor(num_users, 'bert')
+            e.file_loader(file_paths)
+            c, a, v = e.process()
+            
+            tmp_nclusters.append(c)
+            tmp_acc.append(a)
+            tmp_var.append(v)
+        num_clusters.append(tmp_nclusters)
+        accuracies.append(tmp_acc)
+        explained_var.append(tmp_var)
+
+with open('./result/num_clusters.txt', 'wb') as f:
+    pickle.dump(num_clusters, f)
+with open('./result/accuracy.txt', 'wb') as f:
+    pickle.dump(accuracies, f)
+with open('./result/exp_vars.txt', 'wb') as f:
+    pickle.dump(explained_var, f)
+
+for x in accuracies:
+    print('{:.2f}'.format(np.mean(x)))
+for x in accuracies:
+    print('{:.2f}'.format(np.std(x)))

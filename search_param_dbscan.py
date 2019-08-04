@@ -72,7 +72,7 @@ def nu_vm(x, eps, r, bin_size=10):
 # nu: weighted mean
 def nu_wmean(x, eps, bin_size=10):
     num_bins = math.ceil(np.shape(x)[0] / bin_size)
-
+    
     pt_tree = spatial.cKDTree(x)
     num_nbhds = list()
     for pt in x:
