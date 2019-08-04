@@ -1,10 +1,12 @@
 from glob import glob
 import csv
 import demoji
+import itertools
 import numpy as np
 import os
 import pickle
 import re
+import string
 
 
 # download emoji codes; only execute once on the first use
@@ -54,13 +56,40 @@ for i in range(num_files):
 # save the cleaned data
 for i in range(num_files):
     print('### PROCESSING {} out of {}'.format(i + 1, num_files))
-    save_path = os.path.join('.', 'data', 'twitter', 'user_'+str(i)+'.txt')
+    save_path = os.path.join('.', 'data', 'twitter', 'user'+str(i)+'.txt')
     with open(save_path, 'wb') as f:
         pickle.dump(cleaned_data[i], f)
 
 with open(save_path, 'rb') as f:
     test = pickle.load(f)
 
-full = ['webb', 'ellis', '(sportswear)']
-regex = re.compile(r'\(.*\)$')
-filtered = [i for i in full if not regex.match(i)]
+
+# remove bad sentences with broken encoding
+file_paths = glob('./data/twitter/*.txt')
+with open(file_paths[16], 'rb') as f:
+    x = pickle.load(f)
+del x[1249]
+with open(file_paths[16], 'wb') as f:
+    pickle.dump(x, f)
+
+
+# number of words and characters
+file_paths = glob('./data/twitter/*.txt')
+cleaned_data = list()
+for p in file_paths:
+    with open(p, 'rb') as f:
+        cleaned_data.append(pickle.load(f))
+
+chr_cnts = list()
+for n, d in enumerate(cleaned_data):
+    itr_list = list()
+    for s in d:
+        s = s.strip()
+        s = s.translate({ord(c): None for c in string.whitespace})
+        itr_list.append(len(s))
+    chr_cnts.append(itr_list)
+chr_cnts_ = list(itertools.chain(*chr_cnts))
+np.min(chr_cnts_)
+np.max(chr_cnts_)
+np.mean(chr_cnts_)
+np.median(chr_cnts_)
