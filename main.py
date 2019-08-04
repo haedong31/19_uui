@@ -218,15 +218,3 @@ if __name__ == '__main__':
         num_clusters.append(tmp_nclusters)
         accuracies.append(tmp_acc)
         explained_var.append(tmp_var)
-
-with open('./result/num_clusters.txt', 'wb') as f:
-    pickle.dump(num_clusters, f)
-with open('./result/accuracy.txt', 'wb') as f:
-    pickle.dump(accuracies, f)
-with open('./result/exp_vars.txt', 'wb') as f:
-    pickle.dump(explained_var, f)
-
-for x in accuracies:
-    print('{:.2f}'.format(np.mean(x)))
-for x in accuracies:
-    print('{:.2f}'.format(np.std(x)))
